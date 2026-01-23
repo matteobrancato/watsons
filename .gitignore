@@ -39,3 +39,21 @@ Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Data files (don't commit sensitive data)
+*.csv
+*.xlsx
+*.xls
+
+# Local documentation (keep only README.md)
+QUICK_START.md
+PROJECT_SUMMARY.md
+CHECKLIST.md
+COMPLETAMENTO_PROGETTO.md
+SAFARI_FIX.md
+
+# Local scripts (not needed for deployment)
+run_dashboard.sh
+verify_setup.sh
+test_processor.py
+test_dashboard.py
