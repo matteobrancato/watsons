@@ -1,254 +1,148 @@
-"""
-Data processor for Watsons Turkey Automation Dashboard
-Handles data extraction and smart deduplication logic
-"""
+"""Data processor for Watsons Turkey Automation Dashboard."""
 import pandas as pd
-from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 
 class AutomationDataProcessor:
-    """Processes automation test data from baseline and plan CSV files"""
+    """Processes automation test data from baseline and plan CSV files."""
+
+    DESKTOP_COL = "Automation Status Testim Desktop"
+    MOBILE_COL = "Automation Status Testim Mobile View"
+    DEVICE_COL = "Device"
+    AUTOMATED_STATUSES = {"automated uat", "automated prod"}
+    BACKLOG_STATUSES = {"in progress", "ready to be automated"}
 
     def __init__(self, baseline_path: str, plan_path: str):
-        """
-        Initialize processor with file paths
+        self.baseline_path = baseline_path
+        self.plan_path = plan_path
+        self._baseline_df: Optional[pd.DataFrame] = None
+        self._plan_df: Optional[pd.DataFrame] = None
 
-        Args:
-            baseline_path: Path to baseline.csv file
-            plan_path: Path to plan.csv file
-        """
-        self.baseline_path = Path(baseline_path)
-        self.plan_path = Path(plan_path)
-        self.baseline_df = None
-        self.plan_df = None
-
-    def load_data(self) -> bool:
-        """
-        Load CSV files into dataframes
-
-        Returns:
-            bool: True if successful, False otherwise
-        """
+    def _load_data(self) -> bool:
+        """Load CSV files into dataframes."""
         try:
-            self.baseline_df = pd.read_csv(self.baseline_path)
-            self.plan_df = pd.read_csv(self.plan_path)
+            self._baseline_df = pd.read_csv(self.baseline_path)
+            self._plan_df = pd.read_csv(self.plan_path)
             return True
-        except Exception as e:
-            print(f"Error loading data: {e}")
+        except Exception:
             return False
 
-    def calculate_automated(self) -> Dict[str, int]:
-        """
-        Calculate automated test cases from baseline
-        Counts tests with status 'Automated UAT' or 'Automated Prod'
+    def _normalize_column(self, df: pd.DataFrame, col: str) -> pd.Series:
+        """Normalize a column: lowercase, stripped, with NaN as empty string."""
+        return df[col].fillna("").str.strip().str.lower()
 
-        Returns:
-            Dict with desktop, mobile, and total counts
+    def _count_by_device(self, df: pd.DataFrame, desktop_mask: pd.Series,
+                         mobile_mask: pd.Series) -> Dict[str, int]:
         """
-        if self.baseline_df is None:
+        Count items with smart deduplication based on device type.
+
+        Returns dict with desktop, mobile, both counts and total.
+        """
+        device_col = self._normalize_column(df, self.DEVICE_COL) if self.DEVICE_COL in df.columns else pd.Series([""] * len(df))
+
+        desktop_count = mobile_count = both_count = 0
+
+        for i in range(len(df)):
+            device = df[self.DEVICE_COL].iloc[i].strip() if self.DEVICE_COL in df.columns else ""
+            d_match = desktop_mask.iloc[i]
+            m_match = mobile_mask.iloc[i]
+
+            if device == "Both":
+                if d_match and m_match:
+                    both_count += 1
+                elif d_match:
+                    desktop_count += 1
+                elif m_match:
+                    mobile_count += 1
+            elif device == "Desktop":
+                if d_match:
+                    desktop_count += 1
+            elif device == "Mobile":
+                if m_match:
+                    mobile_count += 1
+            else:
+                # Fallback for unknown/empty device
+                if d_match and m_match:
+                    both_count += 1
+                elif d_match:
+                    desktop_count += 1
+                elif m_match:
+                    mobile_count += 1
+
+        return {
+            "desktop": desktop_count,
+            "mobile": mobile_count,
+            "both": both_count,
+            "total": desktop_count + mobile_count + both_count
+        }
+
+    def _calculate_automated(self) -> Dict[str, int]:
+        """Calculate automated test cases from baseline."""
+        if self._baseline_df is None:
             return {"desktop": 0, "mobile": 0, "total": 0}
 
-        desktop_col = "Automation Status Testim Desktop"
-        mobile_col = "Automation Status Testim Mobile View"
+        desktop_status = self._normalize_column(self._baseline_df, self.DESKTOP_COL)
+        mobile_status = self._normalize_column(self._baseline_df, self.MOBILE_COL)
 
-        automated_statuses = ["Automated UAT", "Automated Prod"]
-
-        # Count desktop automated (case-insensitive)
-        desktop_automated = self.baseline_df[desktop_col].fillna("").str.strip().str.lower().isin(
-            [s.lower() for s in automated_statuses]
-        ).sum()
-
-        # Count mobile automated (case-insensitive)
-        mobile_automated = self.baseline_df[mobile_col].fillna("").str.strip().str.lower().isin(
-            [s.lower() for s in automated_statuses]
-        ).sum()
+        desktop_count = desktop_status.isin(self.AUTOMATED_STATUSES).sum()
+        mobile_count = mobile_status.isin(self.AUTOMATED_STATUSES).sum()
 
         return {
-            "desktop": int(desktop_automated),
-            "mobile": int(mobile_automated),
-            "total": int(desktop_automated + mobile_automated)
+            "desktop": int(desktop_count),
+            "mobile": int(mobile_count),
+            "total": int(desktop_count + mobile_count)
         }
 
-    def calculate_backlog_smart(self) -> Dict[str, int]:
-        """
-        Calculate backlog with smart deduplication
-        Counts 'In progress' and 'Ready to be automated' statuses
-        Eliminates duplicates where both Desktop and Mobile have the same status
-
-        Returns:
-            Dict with counts per device type and smart total
-        """
-        if self.plan_df is None:
+    def _calculate_backlog(self) -> Dict[str, int]:
+        """Calculate backlog with smart deduplication."""
+        if self._plan_df is None:
             return {"desktop": 0, "mobile": 0, "both": 0, "smart_total": 0}
 
-        desktop_col = "Automation Status Testim Desktop"
-        mobile_col = "Automation Status Testim Mobile View"
-        device_col = "Device"
+        desktop_status = self._normalize_column(self._plan_df, self.DESKTOP_COL)
+        mobile_status = self._normalize_column(self._plan_df, self.MOBILE_COL)
 
-        backlog_statuses = ["In progress", "Ready to be automated"]
+        desktop_mask = desktop_status.isin(self.BACKLOG_STATUSES)
+        mobile_mask = mobile_status.isin(self.BACKLOG_STATUSES)
 
-        # Normalize statuses (case-insensitive, strip whitespace)
-        df = self.plan_df.copy()
-        df['desktop_status'] = df[desktop_col].fillna("").str.strip().str.lower()
-        df['mobile_status'] = df[mobile_col].fillna("").str.strip().str.lower()
-        df['device_type'] = df[device_col].fillna("").str.strip()
-
-        backlog_statuses_lower = [s.lower() for s in backlog_statuses]
-
-        # Check if desktop or mobile has backlog status
-        df['desktop_backlog'] = df['desktop_status'].isin(backlog_statuses_lower)
-        df['mobile_backlog'] = df['mobile_status'].isin(backlog_statuses_lower)
-
-        # Smart counting logic:
-        # - If Device = "Both" and both desktop_backlog and mobile_backlog are True: count as 1 (not 2)
-        # - If Device = "Desktop" and desktop_backlog: count desktop
-        # - If Device = "Mobile" and mobile_backlog: count mobile
-        # - If Device = "Both" and only one is backlog: count that one
-
-        desktop_count = 0
-        mobile_count = 0
-        both_count = 0
-
-        for _, row in df.iterrows():
-            device = row['device_type']
-            desktop_back = row['desktop_backlog']
-            mobile_back = row['mobile_backlog']
-
-            if device == "Both":
-                if desktop_back and mobile_back:
-                    # Both have backlog status - count as 1 shared item
-                    both_count += 1
-                elif desktop_back:
-                    desktop_count += 1
-                elif mobile_back:
-                    mobile_count += 1
-            elif device == "Desktop":
-                if desktop_back:
-                    desktop_count += 1
-            elif device == "Mobile":
-                if mobile_back:
-                    mobile_count += 1
-            else:
-                # Unknown device type - use fallback logic
-                if desktop_back and mobile_back:
-                    both_count += 1
-                elif desktop_back:
-                    desktop_count += 1
-                elif mobile_back:
-                    mobile_count += 1
-
-        smart_total = desktop_count + mobile_count + both_count
-
+        result = self._count_by_device(self._plan_df, desktop_mask, mobile_mask)
         return {
-            "desktop": int(desktop_count),
-            "mobile": int(mobile_count),
-            "both": int(both_count),
-            "smart_total": int(smart_total)
+            "desktop": result["desktop"],
+            "mobile": result["mobile"],
+            "both": result["both"],
+            "smart_total": result["total"]
         }
 
-    def calculate_blocked(self) -> int:
-        """
-        Calculate blocked test cases from plan
-
-        Returns:
-            int: Number of blocked tests
-        """
-        if self.plan_df is None:
+    def _calculate_blocked(self) -> int:
+        """Calculate blocked test cases from plan."""
+        if self._plan_df is None:
             return 0
 
-        desktop_col = "Automation Status Testim Desktop"
-        mobile_col = "Automation Status Testim Mobile View"
+        desktop_status = self._normalize_column(self._plan_df, self.DESKTOP_COL)
+        mobile_status = self._normalize_column(self._plan_df, self.MOBILE_COL)
 
-        # Check both columns for "Blocked" status (case-insensitive)
-        df = self.plan_df.copy()
-        df['desktop_status'] = df[desktop_col].fillna("").str.strip().str.lower()
-        df['mobile_status'] = df[mobile_col].fillna("").str.strip().str.lower()
+        return int(((desktop_status == "blocked") | (mobile_status == "blocked")).sum())
 
-        # Count rows where either desktop or mobile is blocked
-        blocked_count = ((df['desktop_status'] == 'blocked') |
-                        (df['mobile_status'] == 'blocked')).sum()
-
-        return int(blocked_count)
-
-    def calculate_not_applicable_smart(self) -> Dict[str, int]:
-        """
-        Calculate automation not applicable with smart device breakdown
-        Uses Device column to categorize properly
-
-        Returns:
-            Dict with counts per device type and total
-        """
-        if self.plan_df is None:
+    def _calculate_not_applicable(self) -> Dict[str, int]:
+        """Calculate not applicable tests with smart device breakdown."""
+        if self._plan_df is None:
             return {"desktop": 0, "mobile": 0, "both": 0, "total": 0}
 
-        desktop_col = "Automation Status Testim Desktop"
-        mobile_col = "Automation Status Testim Mobile View"
-        device_col = "Device"
+        desktop_status = self._normalize_column(self._plan_df, self.DESKTOP_COL)
+        mobile_status = self._normalize_column(self._plan_df, self.MOBILE_COL)
 
-        df = self.plan_df.copy()
-        df['desktop_status'] = df[desktop_col].fillna("").str.strip().str.lower()
-        df['mobile_status'] = df[mobile_col].fillna("").str.strip().str.lower()
-        df['device_type'] = df[device_col].fillna("").str.strip()
+        desktop_mask = desktop_status == "automation not applicable"
+        mobile_mask = mobile_status == "automation not applicable"
 
-        # Check if desktop or mobile has "automation not applicable"
-        df['desktop_na'] = df['desktop_status'] == 'automation not applicable'
-        df['mobile_na'] = df['mobile_status'] == 'automation not applicable'
+        return self._count_by_device(self._plan_df, desktop_mask, mobile_mask)
 
-        desktop_count = 0
-        mobile_count = 0
-        both_count = 0
-
-        for _, row in df.iterrows():
-            device = row['device_type']
-            desktop_na = row['desktop_na']
-            mobile_na = row['mobile_na']
-
-            if device == "Both":
-                if desktop_na and mobile_na:
-                    # Both are N/A - count as shared
-                    both_count += 1
-                elif desktop_na:
-                    desktop_count += 1
-                elif mobile_na:
-                    mobile_count += 1
-            elif device == "Desktop":
-                if desktop_na:
-                    desktop_count += 1
-            elif device == "Mobile":
-                if mobile_na:
-                    mobile_count += 1
-            else:
-                # Unknown device - fallback logic
-                if desktop_na and mobile_na:
-                    both_count += 1
-                elif desktop_na:
-                    desktop_count += 1
-                elif mobile_na:
-                    mobile_count += 1
-
-        total = desktop_count + mobile_count + both_count
-
-        return {
-            "desktop": int(desktop_count),
-            "mobile": int(mobile_count),
-            "both": int(both_count),
-            "total": int(total)
-        }
-
-    def get_all_metrics(self) -> Dict:
-        """
-        Calculate all metrics in one call
-
-        Returns:
-            Dict containing all automation metrics
-        """
-        if not self.load_data():
+    def get_all_metrics(self) -> Optional[Dict]:
+        """Calculate all metrics in one call."""
+        if not self._load_data():
             return None
 
         return {
-            "automated": self.calculate_automated(),
-            "backlog": self.calculate_backlog_smart(),
-            "blocked": self.calculate_blocked(),
-            "not_applicable": self.calculate_not_applicable_smart()
+            "automated": self._calculate_automated(),
+            "backlog": self._calculate_backlog(),
+            "blocked": self._calculate_blocked(),
+            "not_applicable": self._calculate_not_applicable()
         }

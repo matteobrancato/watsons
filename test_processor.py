@@ -1,73 +1,93 @@
-"""
-Quick test script to verify data processor logic
-"""
-from data_processor import AutomationDataProcessor
+"""Test suite for Watsons Turkey Automation Dashboard."""
+import sys
 from pathlib import Path
+from data_processor import AutomationDataProcessor
 
-# Setup paths
-desktop = Path.home() / "Desktop"
-baseline_path = desktop / "baseline.csv"
-plan_path = desktop / "plan.csv"
 
-print("=" * 60)
-print("Watsons Turkey Automation Metrics Test")
-print("=" * 60)
+def run_tests():
+    """Run all tests and return success status."""
+    print("=" * 60)
+    print("WATSONS TURKEY DASHBOARD - TEST SUITE")
+    print("=" * 60)
+    print()
 
-# Check files exist
-if not baseline_path.exists():
-    print(f"❌ Error: {baseline_path} not found")
-    exit(1)
+    desktop = Path.home() / "Desktop"
+    baseline_path = desktop / "baseline.csv"
+    plan_path = desktop / "plan.csv"
 
-if not plan_path.exists():
-    print(f"❌ Error: {plan_path} not found")
-    exit(1)
+    # Test 1: Check files exist
+    print("Test 1: Checking data files...")
+    if not baseline_path.exists():
+        print(f"   ❌ FAIL: {baseline_path} not found")
+        return False
+    print("   ✅ baseline.csv found")
 
-print(f"✅ Found baseline.csv")
-print(f"✅ Found plan.csv")
-print()
+    if not plan_path.exists():
+        print(f"   ❌ FAIL: {plan_path} not found")
+        return False
+    print("   ✅ plan.csv found")
+    print()
 
-# Process data
-processor = AutomationDataProcessor(
-    baseline_path=str(baseline_path),
-    plan_path=str(plan_path)
-)
+    # Test 2: Load data
+    print("Test 2: Loading data...")
+    processor = AutomationDataProcessor(str(baseline_path), str(plan_path))
+    metrics = processor.get_all_metrics()
 
-print("Loading data...")
-if not processor.load_data():
-    print("❌ Failed to load data")
-    exit(1)
+    if metrics is None:
+        print("   ❌ FAIL: Could not load data or calculate metrics")
+        return False
+    print("   ✅ Data loaded and metrics calculated")
+    print()
 
-print("✅ Data loaded successfully")
-print()
+    # Test 3: Verify structure
+    print("Test 3: Verifying metric structure...")
+    required = ["automated", "backlog", "blocked", "not_applicable"]
+    for key in required:
+        if key not in metrics:
+            print(f"   ❌ FAIL: Missing key '{key}'")
+            return False
+    print("   ✅ All required metrics present")
+    print()
 
-# Calculate metrics
-print("=" * 60)
-print("METRICS")
-print("=" * 60)
+    # Test 4: Verify data types
+    print("Test 4: Verifying data types...")
+    checks = [
+        (metrics["automated"]["total"], "automated.total"),
+        (metrics["backlog"]["smart_total"], "backlog.smart_total"),
+        (metrics["blocked"], "blocked"),
+        (metrics["not_applicable"]["total"], "not_applicable.total"),
+    ]
+    for value, name in checks:
+        if not isinstance(value, int) or value < 0:
+            print(f"   ❌ FAIL: {name} invalid (value={value})")
+            return False
+    print("   ✅ All data types valid")
+    print()
 
-automated = processor.calculate_automated()
-print("\n✅ AUTOMATED:")
-print(f"   Desktop: {automated['desktop']}")
-print(f"   Mobile:  {automated['mobile']}")
-print(f"   Total:   {automated['total']}")
+    # Test 5: Display results
+    print("Test 5: Metrics Summary")
+    print("-" * 60)
+    auto = metrics["automated"]
+    print(f"   Automated:      {auto['total']:>5} (Desktop: {auto['desktop']}, Mobile: {auto['mobile']})")
+    backlog = metrics["backlog"]
+    print(f"   Backlog:        {backlog['smart_total']:>5} (Desktop: {backlog['desktop']}, Mobile: {backlog['mobile']}, Both: {backlog['both']})")
+    print(f"   Blocked:        {metrics['blocked']:>5}")
+    na = metrics["not_applicable"]
+    print(f"   Not Applicable: {na['total']:>5} (Desktop: {na['desktop']}, Mobile: {na['mobile']}, Both: {na['both']})")
+    print("-" * 60)
 
-backlog = processor.calculate_backlog_smart()
-print("\n📋 BACKLOG (SMART):")
-print(f"   Desktop: {backlog['desktop']}")
-print(f"   Mobile:  {backlog['mobile']}")
-print(f"   Both:    {backlog['both']}")
-print(f"   Total:   {backlog['smart_total']}")
+    total = auto["total"] + backlog["smart_total"] + metrics["blocked"] + na["total"]
+    applicable = auto["total"] + backlog["smart_total"] + metrics["blocked"]
+    if applicable > 0:
+        coverage = (auto["total"] / applicable) * 100
+        print(f"   Total: {total} | Coverage: {coverage:.1f}%")
+    print()
 
-blocked = processor.calculate_blocked()
-print(f"\n🚫 BLOCKED: {blocked}")
+    print("=" * 60)
+    print("ALL TESTS PASSED ✅")
+    print("=" * 60)
+    return True
 
-not_applicable = processor.calculate_not_applicable_smart()
-print("\n➖ NOT APPLICABLE:")
-print(f"   Desktop: {not_applicable['desktop']}")
-print(f"   Mobile:  {not_applicable['mobile']}")
-print(f"   Both:    {not_applicable['both']}")
-print(f"   Total:   {not_applicable['total']}")
 
-print("\n" + "=" * 60)
-print("Test completed successfully! ✅")
-print("=" * 60)
+if __name__ == "__main__":
+    sys.exit(0 if run_tests() else 1)

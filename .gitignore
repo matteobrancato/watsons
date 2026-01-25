@@ -1,59 +1,27 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
+dist/
+build/
 
 # Virtual Environment
 .venv/
 venv/
-ENV/
-env/
 
 # IDE
 .idea/
 .vscode/
 *.swp
-*.swo
 *~
 
 # OS
 .DS_Store
-Thumbs.db
 
 # Streamlit
 .streamlit/secrets.toml
 
-# Data files (don't commit sensitive data)
+# Data files
 *.csv
 *.xlsx
-*.xls
-
-# Local documentation (keep only README.md)
-QUICK_START.md
-PROJECT_SUMMARY.md
-CHECKLIST.md
-COMPLETAMENTO_PROGETTO.md
-SAFARI_FIX.md
-
-# Local scripts (not needed for deployment)
-run_dashboard.sh
-verify_setup.sh
-test_processor.py
-test_dashboard.py
