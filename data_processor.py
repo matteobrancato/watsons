@@ -9,6 +9,7 @@ class AutomationDataProcessor:
     DESKTOP_COL = "Automation Status Testim Desktop"
     MOBILE_COL = "Automation Status Testim Mobile View"
     DEVICE_COL = "Device"
+    NA_REASON_COL = "Automation Not Applicable Reason"
     AUTOMATED_STATUSES = {"automated uat", "automated prod"}
     BACKLOG_STATUSES = {"in progress", "ready to be automated"}
 
@@ -123,6 +124,35 @@ class AutomationDataProcessor:
 
         return int(((desktop_status == "blocked") | (mobile_status == "blocked")).sum())
 
+    def _split_plan_by_empty_row(self) -> tuple:
+        """Split plan dataframe into Desktop Plan and Mobile Plan by empty row."""
+        if self._plan_df is None:
+            return None, None
+
+        # Find the empty row (where ID is NaN)
+        empty_rows = self._plan_df[self._plan_df['ID'].isna()].index
+        if len(empty_rows) == 0:
+            return self._plan_df, pd.DataFrame()
+
+        split_idx = empty_rows[0]
+        plan_desktop = self._plan_df.iloc[:split_idx].copy()
+        plan_mobile = self._plan_df.iloc[split_idx + 1:].copy().reset_index(drop=True)
+
+        return plan_desktop, plan_mobile
+
+    def _calculate_not_applicable_for_df(self, df: pd.DataFrame) -> Dict[str, int]:
+        """Calculate not applicable for a specific dataframe."""
+        if df is None or len(df) == 0:
+            return {"desktop": 0, "mobile": 0, "both": 0, "total": 0}
+
+        desktop_status = self._normalize_column(df, self.DESKTOP_COL)
+        mobile_status = self._normalize_column(df, self.MOBILE_COL)
+
+        desktop_mask = desktop_status == "automation not applicable"
+        mobile_mask = mobile_status == "automation not applicable"
+
+        return self._count_by_device(df, desktop_mask, mobile_mask)
+
     def _calculate_not_applicable(self) -> Dict[str, int]:
         """Calculate not applicable tests with smart device breakdown."""
         if self._plan_df is None:
@@ -136,6 +166,65 @@ class AutomationDataProcessor:
 
         return self._count_by_device(self._plan_df, desktop_mask, mobile_mask)
 
+    def _calculate_not_applicable_detailed(self) -> Dict:
+        """Calculate not applicable with Plan Desktop and Plan Mobile breakdown + armonic sum."""
+        plan_desktop, plan_mobile = self._split_plan_by_empty_row()
+
+        na_plan_desktop = self._calculate_not_applicable_for_df(plan_desktop)
+        na_plan_mobile = self._calculate_not_applicable_for_df(plan_mobile)
+
+        # Armonic sum: take the max of each category between the two plans
+        armonic_desktop = max(na_plan_desktop["desktop"], na_plan_mobile["desktop"])
+        armonic_mobile = max(na_plan_desktop["mobile"], na_plan_mobile["mobile"])
+        armonic_both = max(na_plan_desktop["both"], na_plan_mobile["both"])
+        armonic_total = armonic_desktop + armonic_mobile + armonic_both
+
+        return {
+            "plan_desktop": na_plan_desktop,
+            "plan_mobile": na_plan_mobile,
+            "armonic": {
+                "desktop": armonic_desktop,
+                "mobile": armonic_mobile,
+                "both": armonic_both,
+                "total": armonic_total
+            }
+        }
+
+    def _calculate_na_reasons(self) -> Dict[str, int]:
+        """Calculate breakdown of Not Applicable reasons."""
+        if self._plan_df is None:
+            return {}
+
+        # Check if the NA reason column exists (by name, not position)
+        if self.NA_REASON_COL not in self._plan_df.columns:
+            return {}
+
+        # Filter for NA tests only
+        desktop_status = self._normalize_column(self._plan_df, self.DESKTOP_COL)
+        mobile_status = self._normalize_column(self._plan_df, self.MOBILE_COL)
+        na_mask = (desktop_status == "automation not applicable") | (mobile_status == "automation not applicable")
+        na_tests = self._plan_df[na_mask]
+
+        if len(na_tests) == 0:
+            return {}
+
+        # Count reasons - handle multiple reasons separated by newlines
+        reasons_count: Dict[str, int] = {}
+        for reason_raw in na_tests[self.NA_REASON_COL]:
+            if pd.isna(reason_raw) or str(reason_raw).strip() == "":
+                reason = "No reason specified"
+                reasons_count[reason] = reasons_count.get(reason, 0) + 1
+            else:
+                # Split by newline and count each reason separately
+                reasons = str(reason_raw).strip().split("\n")
+                for r in reasons:
+                    r = r.strip()
+                    if r:
+                        reasons_count[r] = reasons_count.get(r, 0) + 1
+
+        # Sort by count descending
+        return dict(sorted(reasons_count.items(), key=lambda x: x[1], reverse=True))
+
     def get_all_metrics(self) -> Optional[Dict]:
         """Calculate all metrics in one call."""
         if not self._load_data():
@@ -145,5 +234,7 @@ class AutomationDataProcessor:
             "automated": self._calculate_automated(),
             "backlog": self._calculate_backlog(),
             "blocked": self._calculate_blocked(),
-            "not_applicable": self._calculate_not_applicable()
+            "not_applicable": self._calculate_not_applicable(),
+            "not_applicable_detailed": self._calculate_not_applicable_detailed(),
+            "na_reasons": self._calculate_na_reasons()
         }

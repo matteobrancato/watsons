@@ -37,10 +37,6 @@ st.markdown("""
 .stProgress > div > div { background-color: #3b82f6; }
 hr { margin: 2rem 0; border-color: #e2e8f0; }
 h3 { color: #1e293b; font-weight: 700; }
-.upload-section {
-    background-color: #f8fafc; padding: 2rem; border-radius: 12px;
-    border: 2px dashed #cbd5e1; margin: 2rem 0;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -76,7 +72,7 @@ def render_metrics(metrics):
 
     with col1:
         auto = metrics["automated"]
-        st.metric("✅ AUTOMATED", f"{auto['total']:,}", help="Total automated test cases")
+        st.metric("✅ Automated", f"{auto['total']:,}", help="Total automated test cases")
         st.markdown(
             f'<div class="breakdown-text"><b>Desktop:</b> {auto["desktop"]:,} | <b>Mobile:</b> {auto["mobile"]:,}</div>',
             unsafe_allow_html=True
@@ -84,7 +80,7 @@ def render_metrics(metrics):
 
     with col2:
         backlog = metrics["backlog"]
-        st.metric("📋 BACKLOG", f"{backlog['smart_total']:,}", help="Backlog with smart deduplication")
+        st.metric("📋 Backlog", f"{backlog['smart_total']:,}", help="Backlog with smart deduplication")
         st.markdown(
             f'<div class="breakdown-text"><b>Desktop:</b> {backlog["desktop"]:,} | '
             f'<b>Mobile:</b> {backlog["mobile"]:,} | <b>Both:</b> {backlog["both"]:,}</div>',
@@ -92,16 +88,164 @@ def render_metrics(metrics):
         )
 
     with col3:
-        st.metric("🚫 BLOCKED", f"{metrics['blocked']:,}", help="Currently blocked tests")
+        st.metric("🚫 Blocked", f"{metrics['blocked']:,}", help="Currently blocked tests")
 
     with col4:
         na = metrics["not_applicable"]
-        st.metric("➖ NOT APPLICABLE", f"{na['total']:,}", help="Tests not applicable for automation")
+        na_detailed = metrics["not_applicable_detailed"]
+        armonic = na_detailed["armonic"]
+        st.metric("➖ Automation Not Applicable", f"{na['total']:,}", help="Tests not applicable for automation")
         st.markdown(
             f'<div class="breakdown-text"><b>Desktop:</b> {na["desktop"]:,} | '
             f'<b>Mobile:</b> {na["mobile"]:,} | <b>Both:</b> {na["both"]:,}</div>',
             unsafe_allow_html=True
         )
+        st.markdown(
+            f'<div class="breakdown-text" style="margin-top: 0.5rem; font-size: 0.85rem;">'
+            f'<b>Armonic Not Applicable sum:</b> {armonic["total"]:,}<br>'
+            f'<span style="font-size: 0.8rem; color: #94a3b8;">'
+            f'D: {armonic["desktop"]} | M: {armonic["mobile"]} | B: {armonic["both"]}</span></div>',
+            unsafe_allow_html=True
+        )
+
+
+def render_na_threshold(metrics):
+    """Render the Not Applicable Threshold section with gauge chart."""
+    st.divider()
+    st.markdown("### 🎯 Not Applicable Threshold")
+
+    auto_total = metrics["automated"]["total"]
+    armonic_na = metrics["not_applicable_detailed"]["armonic"]["total"]
+    threshold = 15.0  # 15% threshold
+
+    # Calculate the ratio: NA / (Automated + NA)
+    total_completed = auto_total + armonic_na
+    if total_completed > 0:
+        na_ratio = (armonic_na / total_completed) * 100
+    else:
+        na_ratio = 0
+
+    # Determine status color
+    if na_ratio <= threshold:
+        status_color = "#22c55e"  # Green
+        status_text = "Within threshold"
+        status_icon = "✅"
+    elif na_ratio <= threshold * 1.2:  # Up to 20% over threshold (18%)
+        status_color = "#f59e0b"  # Amber
+        status_text = "Near threshold"
+        status_icon = "⚠️"
+    else:
+        status_color = "#ef4444"  # Red
+        status_text = "Exceeds threshold"
+        status_icon = "🚨"
+
+    col1, col2 = st.columns([2, 1], gap="large")
+
+    with col1:
+        # Create a simple gauge-like visualization using progress bars
+        st.markdown(f"""
+        <div style="background-color: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 2px solid #e2e8f0;">
+            <div style="text-align: center; margin-bottom: 1rem;">
+                <span style="font-size: 3rem; font-weight: 800; color: {status_color};">{na_ratio:.1f}%</span>
+                <span style="font-size: 1.5rem; color: #64748b;"> / {threshold:.0f}%</span>
+            </div>
+            <div style="text-align: center; margin-bottom: 1rem;">
+                <span style="font-size: 1.2rem; color: {status_color};">{status_icon} {status_text}</span>
+            </div>
+            <div style="background-color: #e2e8f0; border-radius: 10px; height: 20px; overflow: hidden; position: relative;">
+                <div style="background-color: {status_color}; height: 100%; width: {min(na_ratio, 100)}%; transition: width 0.3s;"></div>
+                <div style="position: absolute; left: {threshold}%; top: 0; bottom: 0; width: 3px; background-color: #1e293b;"></div>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.8rem; color: #94a3b8;">
+                <span>0%</span>
+                <span style="position: relative; left: {threshold - 50}%;">Threshold ({threshold:.0f}%)</span>
+                <span>100%</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        st.markdown(f"""
+        <div style="background-color: #f8fafc; padding: 1rem; border-radius: 8px; border: 1px solid #e2e8f0; height: 100%;">
+            <div style="font-size: 0.9rem; color: #64748b; margin-bottom: 0.5rem;"><b>Calculation</b></div>
+            <div style="font-size: 0.85rem; color: #475569;">
+                <div style="margin-bottom: 0.3rem;">Armonic NA: <b>{armonic_na:,}</b></div>
+                <div style="margin-bottom: 0.3rem;">Automated: <b>{auto_total:,}</b></div>
+                <div style="margin-bottom: 0.3rem;">Total: <b>{total_completed:,}</b></div>
+                <hr style="margin: 0.5rem 0; border-color: #e2e8f0;">
+                <div>Ratio: {armonic_na:,} / {total_completed:,} = <b>{na_ratio:.1f}%</b></div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+
+def render_na_reasons(metrics):
+    """Render the Not Applicable Reasons breakdown section."""
+    na_reasons = metrics.get("na_reasons", {})
+
+    if not na_reasons:
+        return
+
+    st.divider()
+    st.markdown("### 📋 Not Applicable Reasons Analysis")
+
+    total_reasons = sum(na_reasons.values())
+
+    col1, col2 = st.columns([3, 2], gap="large")
+
+    with col1:
+        # Bar chart visualization
+        st.markdown("""
+        <div style="background-color: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 2px solid #e2e8f0;">
+        """, unsafe_allow_html=True)
+
+        # Color palette for bars
+        colors = ["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#6366f1", "#ef4444", "#14b8a6", "#f97316", "#84cc16", "#06b6d4", "#a855f7"]
+
+        for i, (reason, count) in enumerate(na_reasons.items()):
+            pct = (count / total_reasons) * 100
+            color = colors[i % len(colors)]
+            st.markdown(f"""
+            <div style="margin-bottom: 0.8rem;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem;">
+                    <span style="font-size: 0.9rem; font-weight: 500; color: #1e293b;">{reason}</span>
+                    <span style="font-size: 0.9rem; font-weight: 600; color: #64748b;">{count} ({pct:.1f}%)</span>
+                </div>
+                <div style="background-color: #e2e8f0; border-radius: 6px; height: 12px; overflow: hidden;">
+                    <div style="background-color: {color}; height: 100%; width: {pct}%; transition: width 0.3s;"></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with col2:
+        # Summary stats
+        st.markdown(f"""
+        <div style="background-color: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 2px solid #e2e8f0; height: 100%;">
+            <div style="font-size: 1rem; font-weight: 600; color: #1e293b; margin-bottom: 1rem;">Summary</div>
+            <div style="margin-bottom: 1rem;">
+                <div style="font-size: 0.85rem; color: #64748b;">Total Reasons Recorded</div>
+                <div style="font-size: 2rem; font-weight: 800; color: #1e293b;">{total_reasons}</div>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <div style="font-size: 0.85rem; color: #64748b;">Unique Reasons</div>
+                <div style="font-size: 2rem; font-weight: 800; color: #1e293b;">{len(na_reasons)}</div>
+            </div>
+            <hr style="border-color: #e2e8f0; margin: 1rem 0;">
+            <div style="font-size: 0.85rem; color: #64748b; margin-bottom: 0.5rem;"><b>Top 3 Reasons</b></div>
+        """, unsafe_allow_html=True)
+
+        top_3 = list(na_reasons.items())[:3]
+        for i, (reason, count) in enumerate(top_3):
+            medal = ["🥇", "🥈", "🥉"][i]
+            st.markdown(f"""
+            <div style="font-size: 0.85rem; color: #475569; margin-bottom: 0.3rem;">
+                {medal} {reason}: <b>{count}</b>
+            </div>
+            """, unsafe_allow_html=True)
+
+        st.markdown("</div>", unsafe_allow_html=True)
 
 
 def render_summary(metrics):
@@ -169,7 +313,6 @@ def main():
         unsafe_allow_html=True
     )
 
-    st.markdown('<div class="upload-section">', unsafe_allow_html=True)
     col1, col2 = st.columns(2, gap="large")
 
     with col1:
@@ -183,8 +326,6 @@ def main():
         plan = st.file_uploader("Upload plan CSV", type=['csv'], key='plan', label_visibility="collapsed")
         if plan:
             st.success(f"✅ {plan.name} ({plan.size:,} bytes)")
-
-    st.markdown('</div>', unsafe_allow_html=True)
 
     if baseline and plan:
         st.divider()
@@ -201,9 +342,9 @@ def main():
             )
             st.divider()
             render_metrics(metrics)
+            render_na_threshold(metrics)
+            render_na_reasons(metrics)
             render_summary(metrics)
-            st.divider()
-            st.caption("🔄 Upload new files to refresh | 📊 Smart deduplication applied")
     else:
         st.info("👆 Upload both CSV files to view dashboard")
         with st.expander("ℹ️ Required File Format"):
