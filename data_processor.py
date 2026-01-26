@@ -43,7 +43,8 @@ class AutomationDataProcessor:
         desktop_count = mobile_count = both_count = 0
 
         for i in range(len(df)):
-            device = df[self.DEVICE_COL].iloc[i].strip() if self.DEVICE_COL in df.columns else ""
+            raw_device = df[self.DEVICE_COL].iloc[i] if self.DEVICE_COL in df.columns else ""
+            device = str(raw_device).strip() if pd.notna(raw_device) else ""
             d_match = desktop_mask.iloc[i]
             m_match = mobile_mask.iloc[i]
 
