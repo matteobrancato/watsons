@@ -93,14 +93,14 @@ def load_metrics(baseline_file: Any, plan_file: Any) -> Optional[Dict]:
 
 def render_metrics(metrics: Dict) -> None:
     """Render the main metrics cards."""
-    col1, col2, col3, col4 = st.columns(4, gap="large")
+    col1, col2, col3, col4, col5 = st.columns(5, gap="medium")
 
     with col1:
         auto = metrics["automated"]
         st.metric("✅ Automated", f"{auto['total']:,}", help="Total automated test cases")
         st.markdown(
             f'<div class="breakdown-text">'
-            f'<b>Desktop:</b> {auto["desktop"]:,} | <b>Mobile:</b> {auto["mobile"]:,}'
+            f'<b>D:</b> {auto["desktop"]:,} | <b>M:</b> {auto["mobile"]:,}'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -110,32 +110,33 @@ def render_metrics(metrics: Dict) -> None:
         st.metric("📋 Backlog", f"{backlog['smart_total']:,}", help="Backlog with smart deduplication")
         st.markdown(
             f'<div class="breakdown-text">'
-            f'<b>Desktop:</b> {backlog["desktop"]:,} | '
-            f'<b>Mobile:</b> {backlog["mobile"]:,} | <b>Both:</b> {backlog["both"]:,}'
+            f'<b>D:</b> {backlog["desktop"]:,} | '
+            f'<b>M:</b> {backlog["mobile"]:,} | <b>B:</b> {backlog["both"]:,}'
             f'</div>',
             unsafe_allow_html=True,
         )
 
     with col3:
-        st.metric("🚫 Blocked", f"{metrics['blocked']:,}", help="Currently blocked tests")
+        st.metric("🔍 In Review", f"{metrics['in_review']:,}", help="Tests with 'Passed with issue' status")
 
     with col4:
+        st.metric("🚫 Blocked", f"{metrics['blocked']:,}", help="Currently blocked tests")
+
+    with col5:
         na = metrics["not_applicable"]
         armonic = metrics["not_applicable_detailed"]["armonic"]
         st.metric("➖ Not Applicable", f"{na['total']:,}", help="Tests not applicable for automation")
         st.markdown(
             f'<div class="breakdown-text">'
-            f'<b>Desktop:</b> {na["desktop"]:,} | '
-            f'<b>Mobile:</b> {na["mobile"]:,} | <b>Both:</b> {na["both"]:,}'
+            f'<b>D:</b> {na["desktop"]:,} | '
+            f'<b>M:</b> {na["mobile"]:,} | <b>B:</b> {na["both"]:,}'
             f'</div>',
             unsafe_allow_html=True,
         )
         st.markdown(
             f'<div class="breakdown-text" style="margin-top: 0.5rem; font-size: 0.85rem;">'
-            f'<b>Armonic NA sum:</b> {armonic["total"]:,}<br>'
-            f'<span style="font-size: 0.8rem; color: #94a3b8;">'
-            f'D: {armonic["desktop"]} | M: {armonic["mobile"]} | B: {armonic["both"]}'
-            f'</span></div>',
+            f'<b>Armonic:</b> {armonic["total"]:,}'
+            f'</div>',
             unsafe_allow_html=True,
         )
 
@@ -204,65 +205,67 @@ def render_na_threshold(metrics: Dict) -> None:
         )
 
 
+def _build_reasons_bars(reasons: Dict[str, int], total: int) -> str:
+    """Build HTML bars for NA reasons."""
+    if not reasons or total == 0:
+        return '<div style="color: #94a3b8; text-align: center; padding: 1rem;">No data</div>'
+
+    bars = []
+    for i, (reason, count) in enumerate(reasons.items()):
+        pct = (count / total) * 100
+        color = CHART_COLORS[i % len(CHART_COLORS)]
+        bar = (
+            '<div style="margin-bottom: 0.6rem;">'
+            '<div style="display: flex; justify-content: space-between; margin-bottom: 0.2rem;">'
+            f'<span style="font-size: 0.85rem; font-weight: 500; color: #1e293b;">{reason}</span>'
+            f'<span style="font-size: 0.85rem; font-weight: 600; color: #64748b;">{count} ({pct:.1f}%)</span>'
+            '</div>'
+            '<div style="background-color: #e2e8f0; border-radius: 4px; height: 10px; overflow: hidden;">'
+            f'<div style="background-color: {color}; height: 100%; width: {pct}%;"></div>'
+            '</div>'
+            '</div>'
+        )
+        bars.append(bar)
+    return ''.join(bars)
+
+
 def render_na_reasons(metrics: Dict) -> None:
-    """Render the Not Applicable Reasons breakdown section."""
+    """Render the Not Applicable Reasons breakdown section for Desktop and Mobile."""
     na_reasons = metrics.get("na_reasons", {})
-    if not na_reasons:
+    desktop_reasons = na_reasons.get("desktop", {})
+    mobile_reasons = na_reasons.get("mobile", {})
+
+    if not desktop_reasons and not mobile_reasons:
         return
 
     st.divider()
     st.markdown("### 📋 Not Applicable Reasons Analysis")
 
-    total_reasons = sum(na_reasons.values())
-    col1, col2 = st.columns([3, 2], gap="large")
+    col1, col2 = st.columns(2, gap="large")
 
     with col1:
-        bars = []
-        for i, (reason, count) in enumerate(na_reasons.items()):
-            pct = (count / total_reasons) * 100
-            color = CHART_COLORS[i % len(CHART_COLORS)]
-            bar = (
-                '<div style="margin-bottom: 0.8rem;">'
-                '<div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem;">'
-                f'<span style="font-size: 0.9rem; font-weight: 500; color: #1e293b;">{reason}</span>'
-                f'<span style="font-size: 0.9rem; font-weight: 600; color: #64748b;">{count} ({pct:.1f}%)</span>'
-                '</div>'
-                '<div style="background-color: #e2e8f0; border-radius: 6px; height: 12px; overflow: hidden;">'
-                f'<div style="background-color: {color}; height: 100%; width: {pct}%;"></div>'
-                '</div>'
-                '</div>'
-            )
-            bars.append(bar)
-
-        html = '<div style="background-color: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 2px solid #e2e8f0;">' + ''.join(bars) + '</div>'
+        st.markdown("#### 🖥️ Desktop")
+        total_desktop = sum(desktop_reasons.values()) if desktop_reasons else 0
+        bars_html = _build_reasons_bars(desktop_reasons, total_desktop)
+        html = (
+            '<div style="background-color: #f8fafc; padding: 1rem; border-radius: 12px; border: 2px solid #e2e8f0;">'
+            f'<div style="font-size: 0.9rem; color: #64748b; margin-bottom: 0.8rem;"><b>Total:</b> {total_desktop}</div>'
+            f'{bars_html}'
+            '</div>'
+        )
         st.markdown(html, unsafe_allow_html=True)
 
     with col2:
-        top_3 = list(na_reasons.items())[:3]
-        top_3_html = ""
-        medals = ["🥇", "🥈", "🥉"]
-        for i, (reason, count) in enumerate(top_3):
-            top_3_html += f'<div style="font-size: 0.85rem; color: #475569; margin-bottom: 0.3rem;">{medals[i]} {reason}: <b>{count}</b></div>'
-
-        st.markdown(
-            f"""
-            <div style="background-color: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 2px solid #e2e8f0; height: 100%;">
-                <div style="font-size: 1rem; font-weight: 600; color: #1e293b; margin-bottom: 1rem;">Summary</div>
-                <div style="margin-bottom: 1rem;">
-                    <div style="font-size: 0.85rem; color: #64748b;">Total Reasons Recorded</div>
-                    <div style="font-size: 2rem; font-weight: 800; color: #1e293b;">{total_reasons}</div>
-                </div>
-                <div style="margin-bottom: 1rem;">
-                    <div style="font-size: 0.85rem; color: #64748b;">Unique Reasons</div>
-                    <div style="font-size: 2rem; font-weight: 800; color: #1e293b;">{len(na_reasons)}</div>
-                </div>
-                <hr style="border-color: #e2e8f0; margin: 1rem 0;">
-                <div style="font-size: 0.85rem; color: #64748b; margin-bottom: 0.5rem;"><b>Top 3 Reasons</b></div>
-                {top_3_html}
-            </div>
-            """,
-            unsafe_allow_html=True,
+        st.markdown("#### 📱 Mobile")
+        total_mobile = sum(mobile_reasons.values()) if mobile_reasons else 0
+        bars_html = _build_reasons_bars(mobile_reasons, total_mobile)
+        html = (
+            '<div style="background-color: #f8fafc; padding: 1rem; border-radius: 12px; border: 2px solid #e2e8f0;">'
+            f'<div style="font-size: 0.9rem; color: #64748b; margin-bottom: 0.8rem;"><b>Total:</b> {total_mobile}</div>'
+            f'{bars_html}'
+            '</div>'
         )
+        st.markdown(html, unsafe_allow_html=True)
 
 
 def render_summary(metrics: Dict) -> None:
@@ -272,9 +275,10 @@ def render_summary(metrics: Dict) -> None:
 
     auto_total = metrics["automated"]["total"]
     backlog_total = metrics["backlog"]["smart_total"]
+    in_review_total = metrics["in_review"]
     blocked_total = metrics["blocked"]
     na_total = metrics["not_applicable"]["total"]
-    total = auto_total + backlog_total + blocked_total + na_total
+    total = auto_total + backlog_total + in_review_total + blocked_total + na_total
 
     if total == 0:
         st.warning("No test cases found.")
@@ -289,6 +293,7 @@ def render_summary(metrics: Dict) -> None:
         breakdown_items = [
             ("✅ Automated", auto_total),
             ("📋 Backlog", backlog_total),
+            ("🔍 In Review", in_review_total),
             ("🚫 Blocked", blocked_total),
             ("➖ Not Applicable", na_total),
         ]
@@ -301,7 +306,7 @@ def render_summary(metrics: Dict) -> None:
 
     with col_right:
         st.markdown("#### Key Metrics")
-        applicable = auto_total + backlog_total + blocked_total
+        applicable = auto_total + backlog_total + in_review_total + blocked_total
 
         if applicable > 0:
             coverage = (auto_total / applicable) * 100

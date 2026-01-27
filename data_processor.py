@@ -16,10 +16,13 @@ class AutomationDataProcessor:
     NA_REASON_COL = "Automation Not Applicable Reason"
     ID_COL = "ID"
 
+    STATUS_COL = "Status"
+
     AUTOMATED_STATUSES = frozenset({"automated uat", "automated prod"})
     BACKLOG_STATUSES = frozenset({"in progress", "ready to be automated"})
     NA_STATUS = "automation not applicable"
     BLOCKED_STATUS = "blocked"
+    IN_REVIEW_STATUS = "passed with issue"
 
     def __init__(self, baseline_path: str, plan_path: str) -> None:
         """Initialize processor with file paths."""
@@ -171,6 +174,14 @@ class AutomationDataProcessor:
         blocked_mask = (desktop_status == self.BLOCKED_STATUS) | (mobile_status == self.BLOCKED_STATUS)
         return int(blocked_mask.sum())
 
+    def _calculate_in_review(self) -> int:
+        """Calculate tests in review (Status = 'Passed with issue') from plan."""
+        if self._plan_df is None or self.STATUS_COL not in self._plan_df.columns:
+            return 0
+
+        status = self._normalize_column(self._plan_df, self.STATUS_COL)
+        return int((status == self.IN_REVIEW_STATUS).sum())
+
     def _split_plan_by_empty_row(self) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """Split plan dataframe into Desktop and Mobile sections by empty row."""
         if self._plan_df is None:
@@ -225,15 +236,14 @@ class AutomationDataProcessor:
         detailed = self._calculate_not_applicable_detailed()
         return detailed["armonic"].copy()
 
-    def _calculate_na_reasons(self) -> Dict[str, int]:
-        """Calculate breakdown of Not Applicable reasons."""
-        if self._plan_df is None or self.NA_REASON_COL not in self._plan_df.columns:
+    def _count_reasons_for_df(self, df: Optional[pd.DataFrame], status_col: str) -> Dict[str, int]:
+        """Count NA reasons for a specific dataframe."""
+        if df is None or len(df) == 0 or self.NA_REASON_COL not in df.columns:
             return {}
 
-        desktop_status = self._normalize_column(self._plan_df, self.DESKTOP_COL)
-        mobile_status = self._normalize_column(self._plan_df, self.MOBILE_COL)
-        na_mask = (desktop_status == self.NA_STATUS) | (mobile_status == self.NA_STATUS)
-        na_tests = self._plan_df[na_mask]
+        status = self._normalize_column(df, status_col)
+        na_mask = status == self.NA_STATUS
+        na_tests = df[na_mask]
 
         if len(na_tests) == 0:
             return {}
@@ -250,6 +260,15 @@ class AutomationDataProcessor:
 
         return dict(sorted(reasons_count.items(), key=lambda x: x[1], reverse=True))
 
+    def _calculate_na_reasons(self) -> Dict:
+        """Calculate breakdown of Not Applicable reasons for Desktop and Mobile."""
+        plan_desktop, plan_mobile = self._split_plan_by_empty_row()
+
+        return {
+            "desktop": self._count_reasons_for_df(plan_desktop, self.DESKTOP_COL),
+            "mobile": self._count_reasons_for_df(plan_mobile, self.MOBILE_COL),
+        }
+
     def get_all_metrics(self) -> Optional[Dict]:
         """Calculate all metrics in one call."""
         if not self._load_data():
@@ -259,6 +278,7 @@ class AutomationDataProcessor:
             "automated": self._calculate_automated(),
             "backlog": self._calculate_backlog(),
             "blocked": self._calculate_blocked(),
+            "in_review": self._calculate_in_review(),
             "not_applicable": self._calculate_not_applicable(),
             "not_applicable_detailed": self._calculate_not_applicable_detailed(),
             "na_reasons": self._calculate_na_reasons(),
