@@ -194,18 +194,14 @@ def render_na_reasons(metrics):
     col1, col2 = st.columns([3, 2], gap="large")
 
     with col1:
-        # Bar chart visualization
-        st.markdown("""
-        <div style="background-color: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 2px solid #e2e8f0;">
-        """, unsafe_allow_html=True)
-
-        # Color palette for bars
+        # Bar chart visualization - build HTML as single block
         colors = ["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#6366f1", "#ef4444", "#14b8a6", "#f97316", "#84cc16", "#06b6d4", "#a855f7"]
 
+        bars_html = ""
         for i, (reason, count) in enumerate(na_reasons.items()):
             pct = (count / total_reasons) * 100
             color = colors[i % len(colors)]
-            st.markdown(f"""
+            bars_html += f"""
             <div style="margin-bottom: 0.8rem;">
                 <div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem;">
                     <span style="font-size: 0.9rem; font-weight: 500; color: #1e293b;">{reason}</span>
@@ -215,9 +211,13 @@ def render_na_reasons(metrics):
                     <div style="background-color: {color}; height: 100%; width: {pct}%; transition: width 0.3s;"></div>
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+            """
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div style="background-color: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 2px solid #e2e8f0;">
+            {bars_html}
+        </div>
+        """, unsafe_allow_html=True)
 
     with col2:
         # Summary stats
