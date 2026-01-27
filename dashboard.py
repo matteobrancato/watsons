@@ -213,11 +213,8 @@ def render_na_reasons(metrics):
             </div>
             """
 
-        st.markdown(f"""
-        <div style="background-color: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 2px solid #e2e8f0;">
-            {bars_html}
-        </div>
-        """, unsafe_allow_html=True)
+        full_html = '<div style="background-color: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 2px solid #e2e8f0;">' + bars_html + '</div>'
+        st.markdown(full_html, unsafe_allow_html=True)
 
     with col2:
         # Summary stats
