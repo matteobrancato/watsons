@@ -217,26 +217,25 @@ def render_na_reasons(metrics: Dict) -> None:
     col1, col2 = st.columns([3, 2], gap="large")
 
     with col1:
-        bars_html = ""
+        bars = []
         for i, (reason, count) in enumerate(na_reasons.items()):
             pct = (count / total_reasons) * 100
             color = CHART_COLORS[i % len(CHART_COLORS)]
-            bars_html += f"""
-            <div style="margin-bottom: 0.8rem;">
-                <div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem;">
-                    <span style="font-size: 0.9rem; font-weight: 500; color: #1e293b;">{reason}</span>
-                    <span style="font-size: 0.9rem; font-weight: 600; color: #64748b;">{count} ({pct:.1f}%)</span>
-                </div>
-                <div style="background-color: #e2e8f0; border-radius: 6px; height: 12px; overflow: hidden;">
-                    <div style="background-color: {color}; height: 100%; width: {pct}%;"></div>
-                </div>
-            </div>
-            """
+            bar = (
+                '<div style="margin-bottom: 0.8rem;">'
+                '<div style="display: flex; justify-content: space-between; margin-bottom: 0.3rem;">'
+                f'<span style="font-size: 0.9rem; font-weight: 500; color: #1e293b;">{reason}</span>'
+                f'<span style="font-size: 0.9rem; font-weight: 600; color: #64748b;">{count} ({pct:.1f}%)</span>'
+                '</div>'
+                '<div style="background-color: #e2e8f0; border-radius: 6px; height: 12px; overflow: hidden;">'
+                f'<div style="background-color: {color}; height: 100%; width: {pct}%;"></div>'
+                '</div>'
+                '</div>'
+            )
+            bars.append(bar)
 
-        st.markdown(
-            f'<div style="background-color: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 2px solid #e2e8f0;">{bars_html}</div>',
-            unsafe_allow_html=True,
-        )
+        html = '<div style="background-color: #f8fafc; padding: 1.5rem; border-radius: 12px; border: 2px solid #e2e8f0;">' + ''.join(bars) + '</div>'
+        st.markdown(html, unsafe_allow_html=True)
 
     with col2:
         top_3 = list(na_reasons.items())[:3]
