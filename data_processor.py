@@ -78,6 +78,42 @@ class AutomationDataProcessor:
             "total": desktop_count + mobile_count + both_count
         }
 
+    def _count_by_device_simple(self, df: pd.DataFrame, mask: pd.Series) -> Dict[str, int]:
+        """
+        Simple pivot-style count by device (no cross-column deduplication).
+
+        Counts rows where mask is True, grouped by Device column.
+        This mimics Excel pivot table behavior.
+        """
+        if self.DEVICE_COL not in df.columns:
+            return {"desktop": 0, "mobile": 0, "both": 0, "total": int(mask.sum())}
+
+        desktop_count = mobile_count = both_count = 0
+
+        for i in range(len(df)):
+            if not mask.iloc[i]:
+                continue
+
+            raw_device = df[self.DEVICE_COL].iloc[i]
+            device = str(raw_device).strip() if pd.notna(raw_device) else ""
+
+            if device == "Both":
+                both_count += 1
+            elif device == "Desktop":
+                desktop_count += 1
+            elif device == "Mobile":
+                mobile_count += 1
+            else:
+                # Unknown device - count as both for safety
+                both_count += 1
+
+        return {
+            "desktop": desktop_count,
+            "mobile": mobile_count,
+            "both": both_count,
+            "total": desktop_count + mobile_count + both_count
+        }
+
     def _calculate_automated(self) -> Dict[str, int]:
         """Calculate automated test cases from baseline."""
         if self._baseline_df is None:
@@ -140,38 +176,49 @@ class AutomationDataProcessor:
 
         return plan_desktop, plan_mobile
 
-    def _calculate_not_applicable_for_df(self, df: pd.DataFrame) -> Dict[str, int]:
-        """Calculate not applicable for a specific dataframe."""
+    def _calculate_not_applicable_for_df(self, df: pd.DataFrame, status_col: str) -> Dict[str, int]:
+        """
+        Calculate not applicable for a specific dataframe and status column.
+
+        Uses simple pivot-style counting (no cross-column deduplication).
+        """
         if df is None or len(df) == 0:
             return {"desktop": 0, "mobile": 0, "both": 0, "total": 0}
 
-        desktop_status = self._normalize_column(df, self.DESKTOP_COL)
-        mobile_status = self._normalize_column(df, self.MOBILE_COL)
+        status = self._normalize_column(df, status_col)
+        mask = status == "automation not applicable"
 
-        desktop_mask = desktop_status == "automation not applicable"
-        mobile_mask = mobile_status == "automation not applicable"
-
-        return self._count_by_device(df, desktop_mask, mobile_mask)
+        return self._count_by_device_simple(df, mask)
 
     def _calculate_not_applicable(self) -> Dict[str, int]:
-        """Calculate not applicable tests with smart device breakdown."""
-        if self._plan_df is None:
-            return {"desktop": 0, "mobile": 0, "both": 0, "total": 0}
+        """
+        Calculate not applicable tests with simple pivot-style counting.
 
-        desktop_status = self._normalize_column(self._plan_df, self.DESKTOP_COL)
-        mobile_status = self._normalize_column(self._plan_df, self.MOBILE_COL)
+        Uses the detailed calculation and returns the armonic totals for backward compatibility.
+        """
+        detailed = self._calculate_not_applicable_detailed()
+        armonic = detailed["armonic"]
 
-        desktop_mask = desktop_status == "automation not applicable"
-        mobile_mask = mobile_status == "automation not applicable"
-
-        return self._count_by_device(self._plan_df, desktop_mask, mobile_mask)
+        return {
+            "desktop": armonic["desktop"],
+            "mobile": armonic["mobile"],
+            "both": armonic["both"],
+            "total": armonic["total"]
+        }
 
     def _calculate_not_applicable_detailed(self) -> Dict:
-        """Calculate not applicable with Plan Desktop and Plan Mobile breakdown + armonic sum."""
+        """
+        Calculate not applicable with Plan Desktop and Plan Mobile breakdown + armonic sum.
+
+        Uses simple pivot-style counting (like Excel pivot tables).
+        Each status column (Desktop/Mobile) is counted separately, grouped by Device.
+        """
         plan_desktop, plan_mobile = self._split_plan_by_empty_row()
 
-        na_plan_desktop = self._calculate_not_applicable_for_df(plan_desktop)
-        na_plan_mobile = self._calculate_not_applicable_for_df(plan_mobile)
+        # For Plan Desktop section: count by Automation Status Testim Desktop column
+        na_plan_desktop = self._calculate_not_applicable_for_df(plan_desktop, self.DESKTOP_COL)
+        # For Plan Mobile section: count by Automation Status Testim Mobile View column
+        na_plan_mobile = self._calculate_not_applicable_for_df(plan_mobile, self.MOBILE_COL)
 
         # Armonic sum: take the max of each category between the two plans
         armonic_desktop = max(na_plan_desktop["desktop"], na_plan_mobile["desktop"])
