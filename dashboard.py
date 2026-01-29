@@ -117,7 +117,14 @@ def render_metrics(metrics: Dict) -> None:
         )
 
     with col3:
-        st.metric("🔍 In Review", f"{metrics['in_review']:,}", help="Tests with 'Passed with issue' status")
+        in_review = metrics["in_review"]
+        st.metric("🔍 In Review", f"{in_review['total']:,}", help="Tests with 'Passed with issue' status")
+        st.markdown(
+            f'<div class="breakdown-text">'
+            f'<b>D:</b> {in_review["desktop"]:,} | <b>M:</b> {in_review["mobile"]:,}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
 
     with col4:
         st.metric("🚫 Blocked", f"{metrics['blocked']:,}", help="Currently blocked tests")
@@ -275,7 +282,7 @@ def render_summary(metrics: Dict) -> None:
 
     auto_total = metrics["automated"]["total"]
     backlog_total = metrics["backlog"]["smart_total"]
-    in_review_total = metrics["in_review"]
+    in_review_total = metrics["in_review"]["total"]
     blocked_total = metrics["blocked"]
     na_total = metrics["not_applicable"]["total"]
     total = auto_total + backlog_total + in_review_total + blocked_total + na_total

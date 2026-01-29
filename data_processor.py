@@ -174,13 +174,28 @@ class AutomationDataProcessor:
         blocked_mask = (desktop_status == self.BLOCKED_STATUS) | (mobile_status == self.BLOCKED_STATUS)
         return int(blocked_mask.sum())
 
-    def _calculate_in_review(self) -> int:
+    def _calculate_in_review(self) -> Dict[str, int]:
         """Calculate tests in review (Status = 'Passed with issue') from plan."""
         if self._plan_df is None or self.STATUS_COL not in self._plan_df.columns:
-            return 0
+            return {"desktop": 0, "mobile": 0, "total": 0}
 
-        status = self._normalize_column(self._plan_df, self.STATUS_COL)
-        return int((status == self.IN_REVIEW_STATUS).sum())
+        plan_desktop, plan_mobile = self._split_plan_by_empty_row()
+
+        desktop_count = 0
+        if plan_desktop is not None and len(plan_desktop) > 0 and self.STATUS_COL in plan_desktop.columns:
+            status = self._normalize_column(plan_desktop, self.STATUS_COL)
+            desktop_count = int((status == self.IN_REVIEW_STATUS).sum())
+
+        mobile_count = 0
+        if plan_mobile is not None and len(plan_mobile) > 0 and self.STATUS_COL in plan_mobile.columns:
+            status = self._normalize_column(plan_mobile, self.STATUS_COL)
+            mobile_count = int((status == self.IN_REVIEW_STATUS).sum())
+
+        return {
+            "desktop": desktop_count,
+            "mobile": mobile_count,
+            "total": max(desktop_count, mobile_count),
+        }
 
     def _split_plan_by_empty_row(self) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
         """Split plan dataframe into Desktop and Mobile sections by empty row."""
