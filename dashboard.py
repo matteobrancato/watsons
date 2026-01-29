@@ -356,12 +356,14 @@ def main() -> None:
 
     with col1:
         st.markdown("#### 📁 Baseline File")
+        st.caption("[TestRail Baseline Suite](https://elabaswatson.testrail.io/index.php?/suites/view/7544)")
         baseline = st.file_uploader("Upload baseline CSV", type=["csv"], key="baseline", label_visibility="collapsed")
         if baseline:
             st.success(f"✅ {baseline.name} ({baseline.size:,} bytes)")
 
     with col2:
         st.markdown("#### 📁 Plan File")
+        st.caption("[TestRail Plan](https://elabaswatson.testrail.io/index.php?/plans/view/61979)")
         plan = st.file_uploader("Upload plan CSV", type=["csv"], key="plan", label_visibility="collapsed")
         if plan:
             st.success(f"✅ {plan.name} ({plan.size:,} bytes)")
