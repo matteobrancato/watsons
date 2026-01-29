@@ -117,7 +117,7 @@ def render_metrics(metrics: Dict) -> None:
         )
 
     with col3:
-        in_review_raw = metrics["in_review"]
+        in_review_raw = metrics.get("in_review", {"desktop": 0, "mobile": 0, "total": 0})
         if isinstance(in_review_raw, int):
             in_review = {"desktop": 0, "mobile": 0, "total": in_review_raw}
         else:
@@ -286,7 +286,7 @@ def render_summary(metrics: Dict) -> None:
 
     auto_total = metrics["automated"]["total"]
     backlog_total = metrics["backlog"]["smart_total"]
-    in_review_val = metrics["in_review"]
+    in_review_val = metrics.get("in_review", {"desktop": 0, "mobile": 0, "total": 0})
     in_review_total = in_review_val["total"] if isinstance(in_review_val, dict) else in_review_val
     blocked_total = metrics["blocked"]
     na_total = metrics["not_applicable"]["total"]
