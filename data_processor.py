@@ -1,4 +1,7 @@
-"""Data processor for Watsons Turkey Automation Dashboard."""
+"""Data processor for Watsons Turkey Automation Dashboard.
+
+Version: 2.1 - In Review returns Dict with desktop/mobile/total breakdown.
+"""
 
 import logging
 import pandas as pd
