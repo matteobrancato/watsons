@@ -197,7 +197,7 @@ class AutomationDataProcessor:
         return {
             "desktop": desktop_count,
             "mobile": mobile_count,
-            "total": max(desktop_count, mobile_count),
+            "total": desktop_count + mobile_count,
         }
 
     def _split_plan_by_empty_row(self) -> Tuple[Optional[pd.DataFrame], Optional[pd.DataFrame]]:
